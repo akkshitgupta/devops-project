@@ -1,0 +1,129 @@
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-myuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mypassword}
+      POSTGRES_DB: ${DB_NAME:-mydatabase}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/combined-init.sql:/docker-entrypoint-initdb.d/01-combined-init.sql
+    networks:
+      - be-network
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-myuser} -d ${DB_NAME:-mydatabase}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    restart: unless-stopped
+    # ports:
+    #   - "6379:6379"
+    volumes:
+      - rddata:/data
+    networks:
+      - be-network
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-gamepass123}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-gamepass123}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend_service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${BACKEND_PORT:-3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-myuser}
+      DB_PASSWORD: ${DB_PASSWORD:-mypassword}
+      DB_NAME: ${DB_NAME:-mydatabase}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-gamepass123}
+      JWT_SECRET: ${JWT_SECRET:-supersecretkey}
+      API_BASE_URL: ${API_BASE_URL:-/api}
+      FRONTEND_URL: ${FRONTEND_URL:-http://frontend:80}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://frontend:80}
+    # ports:
+    #   - "${BACKEND_PORT:-3001}:${BACKEND_PORT:-3001}"
+    networks:
+      - be-network
+      - fe-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Temporarily disable health check for testing
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend_service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      REACT_APP_API_BASE_URL: ${API_BASE_URL:-/api}
+      API_BASE_URL: ${API_BASE_URL:-/api}
+      BUILD_TIMESTAMP: "1734750000"
+    ports:
+      - "3002:80"
+    networks:
+      - fe-network
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Wait for backend to be fully ready before starting nginx with env substitution
+    command: >
+      sh -c "
+        echo 'Waiting for backend to be ready...' &&
+        while ! nc -z backend 3001; do
+          echo 'Backend not ready, waiting...' &&
+          sleep 2;
+        done &&
+        echo 'Backend is ready! Starting nginx with env substitution...' &&
+        /start.sh
+      "
+
+
+volumes:
+  pgdata:
+    driver: local
+  rddata:
+    driver: local
+
+networks:
+  fe-network:
+    driver: bridge
+  be-network:
+    driver: bridge
