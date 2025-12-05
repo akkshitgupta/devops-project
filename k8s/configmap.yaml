@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: dp-ns
+data:
+  NODE_ENV: "development"
+  DB_NAME: "dp-database"
+  DB_USER: "admin-user"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  API_PORT: "3001"
+  # Use the same nginx proxy pattern for both environments
+  CORS_ORIGIN: "http://localhost:3000,http://localhost:8080"
+  FRONTEND_URL: "http://localhost:8080"
+  API_BASE_URL: "/api"
