@@ -7,12 +7,16 @@
 ```bash
 $ chmod +x ./setup-script.sh
 $ ./setup-script.sh
+
+# prompt password to configure local DNS
+`echo "127.0.0.1 k8sapp.local" | sudo tee -a /etc/hosts`
 ```
 **Expected Output**
 
-prompt password to configure local DNS
+If output is not as expected and all the services have running status, wait for 15-20 sec before running the below command
 
-`echo "127.0.0.1 k8sapp.local" | sudo tee -a /etc/hosts`
+`curl -H "Host: k8sapp.local" http://localhost:9080/api/health`
+
 ```json
 {
   "status": "healthy",
