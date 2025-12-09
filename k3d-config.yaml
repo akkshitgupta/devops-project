@@ -4,7 +4,7 @@ kind: Simple
 metadata:
   name: dp-cluster
 servers: 1
-agents: 2
+agents: 1
 ports:
   - port: 9080:80
     nodeFilters:
@@ -14,7 +14,7 @@ ports:
       - loadbalancer
 registries:
   use: 
-    - k3d-dp-registry:5003
+    - k3d-registry:5003
 options:
   k3s:
     extraArgs:
